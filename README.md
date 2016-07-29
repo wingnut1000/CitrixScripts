@@ -1,2 +1,2 @@
-# CitrixScripts(Public)
+# CitrixScripts
 Repo for Citrix related scripts
