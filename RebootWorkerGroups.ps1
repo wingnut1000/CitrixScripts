@@ -57,7 +57,7 @@
 #>
 
     param (
-        [Parameter(Mandatory=$false)][array]$wgNames,
+        [Parameter(Mandatory=$false,ValueFromPipeline=$True)][string]$wgNames,
         [Parameter(Mandatory=$false)][array]$excludeWorkerGroups,
         [Parameter(Mandatory=$false)][switch]$schTask,
         [Parameter(Mandatory=$false)][int]$availableServers,
@@ -359,9 +359,7 @@
                 }
             }
         }
-    }
-
-    PROCESS{
+        
         #Prompt user is not running as scheduled task
         if (!$schTask) {PromptUser}
 
@@ -375,6 +373,10 @@
                 $wgNames = Get-XAWorkerGroup | Select -ExpandProperty WorkerGroupName
             }
         }
+
+    }
+
+    PROCESS{        
         
         #Start jobs for each worker group
         foreach ($wgName in $wgNames) {
