@@ -1,26 +1,27 @@
 ﻿Function RebootWorkerGroups {
 <#
-    .SYNOPSIS
-        Reboots Xenapp servers within worker groups
+      .SYNOPSIS
+        Reboots Xenapp servers within worker groups on a XenApp 6.5 farm.
     
     .DESCRIPTION
-        Creates background jobs for each worker group.
+        Creates background jobs for each worker group in XenApp farm and runs them concurrently.
         For each worker group, script evaluates how many servers are alive and able to take users.
         Script will place servers in maintenance mode with the option "Prevent logons and reconnections until server reboot."
         Script will then check the servers every 15 minutes (by default) and re-evaluate their status.
         Once all users have vacated the server, it is rebooted and placed back into circulation.
-        It is recomended that all servers in each worker group have logons set to either "Allow logons and reconnections" or "Prevent logons and reconnections until server reboot." before running this script.
+        It is recommended that all servers in each worker group have logons set to either "Allow logons and reconnections" or "Prevent logons and reconnections until server reboot." before running this script.
+        Reference the "RebootWorkerGroup" function for more details on actions preformed on each worker group.
     
     .PARAMETER wgNames
         A list of worker group names to reboot
         By default all worker groups are targeted.
     
     .PARAMETER excludeWorkerGroups
-        A list of worker group names to exlude.
+        A list of worker group names to exclude.
         You may not use this in conjunction with the wgNames parameter.
     
     .PARAMETER schTask
-        Switch will disable the user confirmation prompt to enable script to be run as scheduled task without interuption
+        Switch will disable the user confirmation prompt to enable script to be run as scheduled task without interruption
     
     .PARAMETER availableServers
         Specifies the number of servers to remain available in each worker group.
@@ -34,6 +35,9 @@
         Specifies directory of log file
         Defaults to directory where script is initialized in "Log.txt"
     
+    .PARAMETER rebootComment
+        Specifies optional reboot comment to supply when rebooting servers
+    
     .EXAMPLE
         CitrixServerMaintenance -schTask
     
@@ -41,9 +45,15 @@
         CitrixServerMaintenance -excludeWorkerGroups "Production Worker Group"
     
     .EXAMPLE
-        CitrixServerMaintenance -wgNames "Non Production Worker Group" -loopDelay 1800 -logFile "\\FolderShare\LogDirectory\CitrixRebootLogs.txt"
+        CitrixServerMaintenance -wgNames "Non Production Worker Group" -loopDelay 1800 -logFile "\\FolderShare\LogDirectory\CitrixRebootLogs.txt" -rebootComment "Rebooting server for scheduled maintenance"
     
-  
+    .LINKS
+        https://github.com/caseygill03/CitrixScripts
+
+    .NOTES
+        Ensure this is run from a Zone Data Collector within the XenApp farm you wish to manage.
+        This must be run with an account with the appropriate permissions to preform maintenance on the worker groups.
+        Also, I am not responsible for breaking anything.  Test in a lab before implementing.
 #>
 
     param (
@@ -52,21 +62,45 @@
         [Parameter(Mandatory=$false)][switch]$schTask,
         [Parameter(Mandatory=$false)][int]$availableServers,
         [Parameter(Mandatory=$false)][int]$loopDelay=900,
-        [Parameter(Mandatory=$false)][string]$logFile = ".\Log.txt"
+        [Parameter(Mandatory=$false)][string]$logFile = ".\Log.txt",
+        [Parameter(Mandatory=$false)][string]$rebootComment
     )
 
     BEGIN {
         $functions = {
             #These functions are passes to each job in charge of rebooting a worker group
 
-            Function RebootServer($serverName) {
+            Function RebootServer($serverName, [string]$rebootComment) {
+            <#
+                .DESCRIPTION
+                    Reboots designated server with optional reboot comment
+                    Logs and writes to console
+
+                .PARAMETER serverName
+                    Name or IP address of target server
+
+                .PARAMETER rebootComment
+                    Optional reboot comment to supply when rebooting server
+            #>
 		        Log "Rebooting $serverName" -verbose
-                if ($Debug) {return}
-                $rebootComment = "Rebooting for scheduled maintenance ticket #CHG55456"
-		        shutdown /r /f /t 0 /m \\$serverName /c $rebootComment
+                if (!$rebootComment){
+                    shutdown /r /f /t 0 /m \\$serverName
+                } else {
+		            shutdown /r /f /t 0 /m \\$serverName /c $rebootComment
+                }
             }
 
             Function ServerIsEmpty($serverName,[switch]$verbose) {
+            <#
+                .DESCRIPTION
+                    Tests if a specified server is empty of active ICA sessions
+
+                .PARAMETER serverName
+                    Name or IP address of target server
+                
+                .PARAMETERS verbose
+                    Logs and writes results to console
+            #>
 		        $sessions = Get-XASession -servername $serverName | Where-Object {$_.Protocol -eq "ICA" -and $_.State -eq "Active"}
 		        if ($sessions.Count -gt 0) {
 			        if ($verbos){Log "Server $serverName has active ICA sessions" -verbose}
@@ -78,6 +112,16 @@
             }
 
             Function ServerInMaintenance($serverName,[switch]$verbose) {
+            <#
+                .DESCRIPTION
+                    Tests if server has logins disabled
+                
+                .PARAMETER serverName
+                    Name or IP address of target server
+
+                .PARAMETER verbose
+                    Logs and writes results to console                    
+            #>
                 if (Get-XAServer -Name $serverName | Select -ExpandProperty LogOnsEnabled) {
 			        if ($verbose){Log "$servername is not in maintenance mode" -verbose}
                     return $true
@@ -88,6 +132,17 @@
             }    
 
             Function ServerIsReadyToReboot($serverName) {
+            <#
+                .DESCRIPTION
+                    Test the following conditions to determine if designated server is ready to be rebooted
+                        1. The server has logins disabled
+                        2. The server has no active ICA sessions
+                        3. The server is pingable
+                    Logs and writes results to console
+                
+                .PARAMETER serverName
+                    Name or IP address of server to target
+            #>
                 if ((ServerInMaintenance $serverName -verbose) -and (ServerIsEmpty $serverName -verbose) -and (ServerIsAlive $serverName -verbose)) {
                     return $true
                 } else {
@@ -96,6 +151,16 @@
             }
 
             Function ServerIsAlive($serverName,[switch]$verbose) {
+            <#
+                .DESCRIPTION
+                    Preforms a simple ping test to specified server
+                
+                .PARAMETER serverName
+                    Name or IP address of target server
+
+                .PARAMETER verbose
+                    Will log and write to console results
+            #>
                 if (Test-Connection -BufferSize 16 -Count 1 -ComputerName $serverName -Quiet) {
                     if($verbose){Log "Server $serverName is pingable" -verbose}
                     return $true
@@ -115,8 +180,7 @@
 
                 .Parameter availableServers
                     Allows user to set the number of servers to remain avaliable.
-                    If not specified, half of the farm we remain avaliable.
-
+                    If not specified, half of the farm will remain avaliable.
             #>        
                 param (
                     [Parameter(Mandatory=$true)][string]$workerGroupName,
@@ -152,10 +216,10 @@
                     Contents of log message
     
                 .PARAMETER verbose
-                    Writes to screen
+                    Writes message to console
 
                 .PARAMETER color
-                    Foreground color of message
+                    Optional foreground color of message when writing to console
             #>
                 if ($verbose) {
                     if ($color) {
@@ -170,12 +234,18 @@
             Function RebootWorkerGroup  {
                 <#
 	                .SYNOPSIS
-		                Preformes maintenance on Xenapp Servers
+		                Reboots designated worker group
 
 	                .DESCRIPTION
-		                Checks each server in each workgroup.  If server is in maintenance mode and no sessions are active, reboots server.
-                        With at least half of the farm avaliable, will cycle through each server, enable maintenance mode, drain users and reboot.
-    
+                        This is the main function that handles rebooting a worker group.
+                        The following conditions must be met in order for a server to be rebooted.
+                            1. The server must not have logins enabled
+                            2. The server must have no active ICA sessions
+                            3. The server must be pingable
+                            
+                        If the conditions are not met the script will call the CheckWorkerGroupThreshold function to determine if there
+                        are enough availalbe server in the worker group to disable logins for the designated server.
+                            
                     .PARAMETER workerGroupName
                         Name of target worker group to reboot
 
@@ -193,7 +263,8 @@
                     [Paramater(Mandatory=$true)][string]$workerGroupName,
                     [Paramater(Mandatory=$true)][int]$loopDelay,
                     [Parameter(Mandatory=$true)][int]$availableServers,
-                    [Paramater(Mandatory=$true)][string]$logFile
+                    [Paramater(Mandatory=$true)][string]$logFile,
+                    [Paramater(Mandatory=$false)][string]$rebootComment
                 )
 
                 Log "Beginning reboot on $workerGroupName" -verbose
@@ -233,7 +304,7 @@
                     foreach ($serverName in $needToReboot) {            
                         if (ServerIsReadyToReboot $serverName) {
                             Log "Server $serverName is ready to reboot" -verbose
-                            RebootServer $serverName
+                            RebootServer $serverName $rebootComment
                             $needToReboot = $needToReboot | Where-Object {$_ -ne $serverName}
                             $hasRebooted += $serverName
                         } else {
@@ -306,7 +377,7 @@
         
         #Start jobs for each worker group
         foreach ($wgName in $wgNames) {
-            Start-Job -Name $wgName -InitializationScript $functions -ScriptBlock {RebootWorkerGroup $args[0] $args[1] $args[2] $args[3]} -ArgumentList $wgName,$loopDelay,$availableServers,$logFile | Out-Null
+            Start-Job -Name $wgName -InitializationScript $functions -ScriptBlock {RebootWorkerGroup -wgName $args[0] -loopDelay $args[1] -availableServers $args[2] -logFile $args[3] -rebootComment $args[4]} -ArgumentList $wgName,$loopDelay,$availableServers,$logFile,$rebootComment | Out-Null
         }
 
         #Loop until all jobs are complete
