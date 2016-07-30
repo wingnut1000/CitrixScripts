@@ -245,6 +245,7 @@
                             
                         If the conditions are not met the script will call the CheckWorkerGroupThreshold function to determine if there
                         are enough availalbe server in the worker group to disable logins for the designated server.
+                        Once all conditions are met the server is rebooted and placed back into circulation.
                             
                     .PARAMETER workerGroupName
                         Name of target worker group to reboot
