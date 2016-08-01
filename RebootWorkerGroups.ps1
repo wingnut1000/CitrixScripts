@@ -57,7 +57,7 @@
 #>
 
     param (
-        [Parameter(Mandatory=$false,ValueFromPipeline=$True)][string]$wgNames,
+        [Parameter(Mandatory=$false,ValueFromPipeline=$True)][array]$wgNames,
         [Parameter(Mandatory=$false)][array]$excludeWorkerGroups,
         [Parameter(Mandatory=$false)][switch]$schTask,
         [Parameter(Mandatory=$false)][int]$availableServers,
