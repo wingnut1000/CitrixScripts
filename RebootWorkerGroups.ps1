@@ -347,7 +347,7 @@
                     Do call this function if script is running as a sheduled task!!!
             #>
                 $title = "Server maintenance"
-                $message = "Warning, this script will perform maintenance on the Production Xenapp Farm.  Servers will be place into maintenance mode and once users have vacated them they will be rebooted.  Half of each worker group will remain available, please monitor each worker group load closely." 
+                $message = "Warning, this script will perform maintenance on the worker groups(s) $wgNames. Servers will be place into maintenance mode and once users have vacated them they will be rebooted.  Monitor each worker group load closely." 
                 $a = new-object -comobject wscript.shell 
                 $intAnswer = $a.popup($message,0,$title,4) 
                 if ($intAnswer -eq 6) { 
@@ -360,9 +360,6 @@
             }
         }
         
-        #Prompt user is not running as scheduled task
-        if (!$schTask) {PromptUser}
-
         #Determine worker group names to target if none were provided
         if (!$wgNames) {        
             if ($excludeWorkerGroups) {
@@ -373,6 +370,9 @@
                 $wgNames = Get-XAWorkerGroup | Select -ExpandProperty WorkerGroupName
             }
         }
+        
+         #Prompt user is not running as scheduled task
+        if (!$schTask) {PromptUser $wgNames}
 
     }
 
