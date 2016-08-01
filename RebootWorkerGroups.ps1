@@ -298,7 +298,7 @@
                     if ($i -gt 0) {
                         #Loop has run more then once, delay script
                         Log "Waiting $loopDelay seconds for resources to become available..." -verbose
-		                Log "Next cycle begins at $((Get-Date).AddSeconds($loopDelay).Tostring('[MM/dd/yyyy]H:mm:ss'))" -verbose
+	                Log "Next cycle begins at $((Get-Date).AddSeconds($loopDelay).Tostring('[MM/dd/yyyy]H:mm:ss'))" -verbose
                         Start-Sleep -Seconds $loopDelay
                     } else {$i ++}
 
