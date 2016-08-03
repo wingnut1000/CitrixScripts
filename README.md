@@ -1,5 +1,7 @@
 # CitrixScripts
 Repository for Citrix related scripts.
 
-####[RebootWorkerGroups.ps1](https://github.com/wingnut1000/CitrixScripts/wiki/RebootWorkerGroups.ps1)
+For more information, reference the Wiki article for each script
+
+* [RebootWorkerGroups.ps1](https://github.com/wingnut1000/CitrixScripts/wiki/RebootWorkerGroups.ps1)
 
